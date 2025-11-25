@@ -37,26 +37,34 @@ const getSales = async (req, res) => {
       .sort({ createdAt: -1 })
       .populate('products.productId', 'name category');
 
+    // Filtrar ventas completadas para estadísticas
+    const completedSales = sales.filter(s => s.status === 'completada');
+
+    // Cantidad de ventas completadas
+    const totalVentas = completedSales.length;
+
     // Calcular estadísticas
-    const totalVentas = sales.length;
-    const totalMonto = sales.reduce((sum, sale) => sum + sale.total, 0);
-    const totalProductos = sales.reduce((sum, sale) => 
+    const totalMonto = completedSales.reduce((sum, sale) => sum + sale.total, 0);
+    const totalProductos = completedSales.reduce((sum, sale) => 
       sum + sale.products.reduce((pSum, p) => pSum + p.quantity, 0), 0
     );
 
     // Estadísticas por método de pago
     const statsByPaymentMethod = {
       efectivo: {
-        count: sales.filter(s => s.paymentMethod === 'efectivo').length,
-        total: sales.filter(s => s.paymentMethod === 'efectivo').reduce((sum, s) => sum + s.total, 0)
+        count: completedSales.filter(s => s.paymentMethod === 'efectivo').length,
+        total: completedSales.filter(s => s.paymentMethod === 'efectivo')
+          .reduce((sum, s) => sum + s.total, 0)
       },
       transferencia: {
-        count: sales.filter(s => s.paymentMethod === 'transferencia').length,
-        total: sales.filter(s => s.paymentMethod === 'transferencia').reduce((sum, s) => sum + s.total, 0)
+        count: completedSales.filter(s => s.paymentMethod === 'transferencia').length,
+        total: completedSales.filter(s => s.paymentMethod === 'transferencia')
+          .reduce((sum, s) => sum + s.total, 0)
       },
       tarjeta: {
-        count: sales.filter(s => s.paymentMethod === 'tarjeta').length,
-        total: sales.filter(s => s.paymentMethod === 'tarjeta').reduce((sum, s) => sum + s.total, 0)
+        count: completedSales.filter(s => s.paymentMethod === 'tarjeta').length,
+        total: completedSales.filter(s => s.paymentMethod === 'tarjeta')
+          .reduce((sum, s) => sum + s.total, 0)
       }
     };
 
@@ -405,14 +413,16 @@ const getTodaySales = async (req, res) => {
 
     const sales = await Sale.find({
       storeId: req.store.id,
+      status: 'completada',
       createdAt: {
         $gte: startOfDay,
         $lte: endOfDay
       }
     }).sort({ createdAt: -1 });
 
-    const totalVentas = sales.length;
-    const totalMonto = sales.reduce((sum, sale) => sum + sale.total, 0);
+    const completedSales = sales.filter(s => s.status === 'completada');
+    const totalMonto = completedSales.reduce((sum, sale) => sum + sale.total, 0);
+    const totalVentas = completedSales.length;
 
     res.json({
       success: true,
