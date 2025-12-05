@@ -3,7 +3,6 @@ const Product = require('../models/Product.model');
 const Store = require('../models/Store.model');
 const mongoose = require('mongoose');
 const { sendReceiptEmail } = require('../services/emailService');
-const { sendReceiptWhatsApp } = require('../services/whatsappService');
 
 // @desc    Obtener todas las ventas del almacén
 // @route   GET /api/sales
@@ -154,20 +153,12 @@ const createSale = async (req, res) => {
       });
     }
 
-    // 👇 NUEVA VALIDACIÓN: Si eligió envío, validar datos del cliente
+    // Si eligió envío, validar datos del cliente
     if (receiptSent === 'email' && !customer?.email) {
       await session.abortTransaction();
       return res.status(400).json({
         success: false,
         message: 'Email del cliente requerido para enviar comprobante'
-      });
-    }
-
-    if (receiptSent === 'whatsapp' && !customer?.phone) {
-      await session.abortTransaction();
-      return res.status(400).json({
-        success: false,
-        message: 'WhatsApp del cliente requerido para enviar comprobante'
       });
     }
 
@@ -265,24 +256,6 @@ const createSale = async (req, res) => {
           console.log(`✅ Comprobante enviado por email a ${customer.email}`);
         } catch (emailError) {
           console.error('❌ Error al enviar email:', emailError.message);
-          // No afecta la venta, solo loggear el error
-        }
-      });
-    }
-
-    // 📱 ENVIAR COMPROBANTE POR WHATSAPP (fuera de la transacción)
-    if (receiptSent === 'whatsapp' && customer?.phone) {
-      // Ejecutar en background sin bloquear la respuesta
-      setImmediate(async () => {
-        try {
-          const Store = require('../models/Store');
-          const store = await Store.findById(req.store.id);
-          
-          await sendReceiptWhatsApp(sale, store, customer.phone);
-          
-          console.log(`✅ Comprobante enviado por WhatsApp a ${customer.phone}`);
-        } catch (whatsappError) {
-          console.error('❌ Error al enviar WhatsApp:', whatsappError.message);
           // No afecta la venta, solo loggear el error
         }
       });

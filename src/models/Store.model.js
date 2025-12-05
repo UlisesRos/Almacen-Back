@@ -24,9 +24,25 @@ const storeSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: [true, 'La contraseña es requerida'],
-    minlength: [6, 'La contraseña debe tener al menos 6 caracteres'],
+    required: function() {
+      return !this.googleId; // Solo requerido si no hay googleId
+    },
+    validate: {
+      validator: function(v) {
+        // Si hay googleId, password es opcional
+        if (this.googleId) return true;
+        // Si no hay googleId, password debe tener al menos 6 caracteres
+        return !v || v.length >= 6;
+      },
+      message: 'La contraseña debe tener al menos 6 caracteres'
+    },
     select: false
+  },
+  googleId: {
+    type: String,
+    unique: true,
+    sparse: true, // Permite múltiples nulls
+    trim: true
   },
   phone: {
     type: String,
@@ -62,9 +78,10 @@ const storeSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Encriptar password antes de guardar
+// Encriptar password antes de guardar (solo si hay password)
 storeSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) {
+  // Si no hay password o no se modificó, continuar
+  if (!this.password || !this.isModified('password')) {
     return next();
   }
   
@@ -77,8 +94,19 @@ storeSchema.pre('save', async function(next) {
   }
 });
 
+// Validar que tenga password o googleId
+storeSchema.pre('save', async function(next) {
+  if (!this.password && !this.googleId) {
+    return next(new Error('Debe proporcionar una contraseña o autenticarse con Google'));
+  }
+  next();
+});
+
 // Método para comparar passwords
 storeSchema.methods.comparePassword = async function(candidatePassword) {
+  if (!this.password) {
+    return false;
+  }
   return await bcrypt.compare(candidatePassword, this.password);
 };
 

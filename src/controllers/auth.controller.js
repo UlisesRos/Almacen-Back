@@ -198,9 +198,120 @@ const updateProfile = async (req, res) => {
   }
 };
 
+// @desc    Autenticación/Registro con Google
+// @route   POST /api/auth/google
+// @access  Public
+const googleAuth = async (req, res) => {
+  try {
+    const { googleId, email, name, picture } = req.body;
+
+    // Validar datos requeridos
+    if (!googleId || !email || !name) {
+      return res.status(400).json({
+        success: false,
+        message: 'Faltan datos requeridos de Google'
+      });
+    }
+
+    // Buscar si ya existe un almacén con este email o googleId
+    let store = await Store.findOne({ 
+      $or: [
+        { email },
+        { googleId }
+      ]
+    });
+
+    if (store) {
+      // Si existe pero no tiene googleId, actualizarlo
+      if (!store.googleId) {
+        store.googleId = googleId;
+        await store.save();
+      }
+
+      // Verificar que esté activo
+      if (!store.isActive) {
+        return res.status(403).json({
+          success: false,
+          message: 'Almacén desactivado. Contacta al administrador'
+        });
+      }
+
+      // Generar token
+      const token = generateToken(store._id);
+
+      return res.json({
+        success: true,
+        message: 'Login exitoso con Google',
+        data: {
+          store: {
+            id: store._id,
+            storeName: store.storeName,
+            ownerName: store.ownerName,
+            email: store.email,
+            phone: store.phone,
+            address: store.address
+          },
+          token
+        }
+      });
+    }
+
+    // Si no existe, crear nuevo almacén
+    // Dividir el nombre en storeName y ownerName
+    const nameParts = name.split(' ');
+    const storeName = nameParts[0] || 'Mi Almacén';
+    const ownerName = name;
+
+    store = await Store.create({
+      storeName,
+      ownerName,
+      email,
+      googleId,
+      // password no es requerido si hay googleId
+    });
+
+    // Generar token
+    const token = generateToken(store._id);
+
+    res.status(201).json({
+      success: true,
+      message: 'Cuenta creada exitosamente con Google',
+      data: {
+        store: {
+          id: store._id,
+          storeName: store.storeName,
+          ownerName: store.ownerName,
+          email: store.email,
+          phone: store.phone,
+          address: store.address
+        },
+        token
+      }
+    });
+
+  } catch (error) {
+    console.error('Error en googleAuth:', error);
+    
+    // Si es error de duplicado
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Este email o cuenta de Google ya está registrado'
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Error en autenticación con Google',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   register,
   login,
   getMe,
-  updateProfile
+  updateProfile,
+  googleAuth
 }
