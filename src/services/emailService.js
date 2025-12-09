@@ -3,18 +3,19 @@ const path = require('path');
 
 require('dotenv').config({ path: path.join(process.cwd(), '.env') });
 
-console.log("🔍 EMAIL_USER:", process.env.EMAIL_USER);
-console.log("🔍 EMAIL_PASSWORD:", process.env.EMAIL_PASSWORD);
-console.log("🔍 EMAIL_PASS:", process.env.EMAIL_PASS);
+console.log("🔍 BREVO_USER:", process.env.BREVO_USER);
+console.log("🔍 BREVO_PASS:", process.env.BREVO_PASS ? "***" : "No configurado");
 
-console.log("📥 Email service cargado");
+console.log("📥 Email service cargado (Brevo)");
 
-// Configuracion del transporter
+// Configuracion del transporter para Brevo
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp-relay.brevo.com',
+  port: 587,
+  secure: false, // true para 465, false para otros puertos
   auth: {
-    user: process.env.EMAIL_USER, 
-    pass: process.env.EMAIL_PASS 
+    user: process.env.BREVO_USER, 
+    pass: process.env.BREVO_PASS 
   }
 });
 
@@ -112,7 +113,7 @@ const sendReceiptEmail = async (sale, store, customerEmail) => {
     const mailOptions = {
       from: {
         name: store.storeName,
-        address: process.env.EMAIL_USER
+        address: process.env.BREVO_USER
       },
       to: customerEmail,
       subject: `Comprobante de Venta - Ticket #${sale.ticketNumber}`,
