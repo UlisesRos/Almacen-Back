@@ -6,6 +6,10 @@ require('dotenv').config({ path: path.join(process.cwd(), '.env') });
 console.log("🔍 BREVO_USER:", process.env.BREVO_USER);
 console.log("🔍 BREVO_PASS:", process.env.BREVO_PASS ? "***" : "No configurado");
 
+// Nota: BREVO_USER debe ser tu email de cuenta de Brevo (ej: tu-email@ejemplo.com)
+// BREVO_PASS debe ser la SMTP Key generada en Brevo (no tu contraseña de cuenta)
+// Puedes generar la SMTP Key en: Brevo Dashboard > SMTP & API > SMTP Keys
+
 console.log("📥 Email service cargado (Brevo)");
 
 // Configuracion del transporter para Brevo
@@ -13,9 +17,17 @@ const transporter = nodemailer.createTransport({
   host: 'smtp-relay.brevo.com',
   port: 587,
   secure: false, // true para 465, false para otros puertos
+  requireTLS: true, // Requiere TLS para el puerto 587
   auth: {
     user: process.env.BREVO_USER, 
     pass: process.env.BREVO_PASS 
+  },
+  connectionTimeout: 10000, // 10 segundos para establecer conexión
+  greetingTimeout: 10000, // 10 segundos para el saludo SMTP
+  socketTimeout: 10000, // 10 segundos para operaciones de socket
+  tls: {
+    // No rechazar certificados no autorizados (útil en algunos entornos)
+    rejectUnauthorized: false
   }
 });
 
@@ -105,9 +117,26 @@ const generateReceiptHTML = (sale, store) => {
   `;
 };
 
+// Verificar conexión con Brevo
+const verifyConnection = async () => {
+  try {
+    await transporter.verify();
+    console.log('✅ Conexión con Brevo verificada correctamente');
+    return true;
+  } catch (error) {
+    console.error('❌ Error al verificar conexión con Brevo:', error.message);
+    return false;
+  }
+};
+
 // Enviar email con comprobante
 const sendReceiptEmail = async (sale, store, customerEmail) => {
   try {
+    // Intentar verificar conexión (no bloquea si falla, solo informa)
+    verifyConnection().catch(() => {
+      console.log('⚠️ Advertencia: No se pudo verificar la conexión, pero se intentará enviar el email');
+    });
+
     const html = generateReceiptHTML(sale, store);
 
     const mailOptions = {
@@ -120,12 +149,18 @@ const sendReceiptEmail = async (sale, store, customerEmail) => {
       html: html
     };
 
+    console.log(`📧 Intentando enviar email a: ${customerEmail}`);
     const info = await transporter.sendMail(mailOptions);
-    console.log('Email enviado:', info.messageId);
+    console.log('✅ Email enviado exitosamente:', info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error('Error al enviar email:', error);
-    throw new Error('No se pudo enviar el comprobante por email');
+    console.error('❌ Error al enviar email:', error.message);
+    console.error('Detalles del error:', {
+      code: error.code,
+      command: error.command,
+      response: error.response
+    });
+    throw new Error(`No se pudo enviar el comprobante por email: ${error.message}`);
   }
 };
 
