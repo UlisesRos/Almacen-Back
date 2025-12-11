@@ -3,32 +3,38 @@ const path = require('path');
 
 require('dotenv').config({ path: path.join(process.cwd(), '.env') });
 
-console.log("🔍 BREVO_USER:", process.env.BREVO_USER);
-console.log("🔍 BREVO_PASS:", process.env.BREVO_PASS ? "***" : "No configurado");
-
-// Nota: BREVO_USER debe ser tu email de cuenta de Brevo (ej: tu-email@ejemplo.com)
-// BREVO_PASS debe ser la SMTP Key generada en Brevo (no tu contraseña de cuenta)
-// Puedes generar la SMTP Key en: Brevo Dashboard > SMTP & API > SMTP Keys
-
-console.log("📥 Email service cargado (Brevo)");
+console.log("📥 ========== CONFIGURACIÓN EMAIL SERVICE ==========");
+console.log("🔍 BREVO_USER:", process.env.BREVO_USER || "❌ NO CONFIGURADO");
+console.log("🔍 BREVO_PASS:", process.env.BREVO_PASS ? `✅ Configurado (${process.env.BREVO_PASS.length} caracteres)` : "❌ NO CONFIGURADO");
+console.log("📧 BREVO_FROM_EMAIL:", process.env.BREVO_FROM_EMAIL || "⚠️  No configurado (se usará el email del almacén)");
+console.log("🌐 Host SMTP: smtp-relay.brevo.com");
+console.log("🔌 Puerto: 587 (TLS)");
+if (!process.env.BREVO_USER || !process.env.BREVO_PASS) {
+  console.log("⚠️  ADVERTENCIA: Las credenciales de Brevo no están configuradas correctamente");
+  console.log("📝 Para configurar Brevo:");
+  console.log("   1. Ve a: https://app.brevo.com/settings/keys/api");
+  console.log("   2. Crea una SMTP Key (NO uses la API Key)");
+  console.log("   3. BREVO_USER = tu email de cuenta de Brevo");
+  console.log("   4. BREVO_PASS = la SMTP Key generada (NO tu contraseña de cuenta)");
+  console.log("   5. BREVO_FROM_EMAIL = email verificado en Brevo para enviar (opcional, se usa el email del almacén)");
+}
+console.log("📥 =================================================");
 
 // Configuracion del transporter para Brevo
 const transporter = nodemailer.createTransport({
   host: 'smtp-relay.brevo.com',
   port: 587,
   secure: false, // true para 465, false para otros puertos
-  requireTLS: true, // Requiere TLS para el puerto 587
   auth: {
     user: process.env.BREVO_USER, 
     pass: process.env.BREVO_PASS 
   },
-  connectionTimeout: 10000, // 10 segundos para establecer conexión
-  greetingTimeout: 10000, // 10 segundos para el saludo SMTP
-  socketTimeout: 10000, // 10 segundos para operaciones de socket
   tls: {
-    // No rechazar certificados no autorizados (útil en algunos entornos)
+    // No rechazar certificados no autorizados
     rejectUnauthorized: false
-  }
+  },
+  debug: true, // Habilitar debug para ver más detalles
+  logger: true // Habilitar logger
 });
 
 // Generar HTML del comprobante
@@ -131,18 +137,36 @@ const verifyConnection = async () => {
 
 // Enviar email con comprobante
 const sendReceiptEmail = async (sale, store, customerEmail) => {
+  console.log('🚀 Iniciando envío de email...');
+  console.log('📋 Configuración:', {
+    host: transporter.options.host,
+    port: transporter.options.port,
+    user: process.env.BREVO_USER,
+    fromEmail: process.env.BREVO_USER,
+    toEmail: customerEmail
+  });
+
   try {
-    // Intentar verificar conexión (no bloquea si falla, solo informa)
-    verifyConnection().catch(() => {
-      console.log('⚠️ Advertencia: No se pudo verificar la conexión, pero se intentará enviar el email');
-    });
+    // Validar que las credenciales estén configuradas
+    if (!process.env.BREVO_USER || !process.env.BREVO_PASS) {
+      throw new Error('BREVO_USER o BREVO_PASS no están configurados en las variables de entorno');
+    }
 
     const html = generateReceiptHTML(sale, store);
 
+    // Usar el email del almacén como remitente (debe estar verificado en Brevo)
+    // Si no hay email del almacén, usar BREVO_FROM_EMAIL o BREVO_USER como fallback
+    const fromEmail = store.email || process.env.BREVO_FROM_EMAIL || process.env.BREVO_USER;
+    
+    // Validar que el email del remitente sea válido
+    if (!fromEmail || !fromEmail.includes('@')) {
+      throw new Error('El email del remitente no es válido. Verifica que el almacén tenga un email configurado o configura BREVO_FROM_EMAIL en las variables de entorno');
+    }
+
     const mailOptions = {
       from: {
-        name: store.storeName,
-        address: process.env.BREVO_USER
+        name: store.storeName || 'Almacén',
+        address: fromEmail
       },
       to: customerEmail,
       subject: `Comprobante de Venta - Ticket #${sale.ticketNumber}`,
@@ -150,20 +174,70 @@ const sendReceiptEmail = async (sale, store, customerEmail) => {
     };
 
     console.log(`📧 Intentando enviar email a: ${customerEmail}`);
+    console.log(`📧 Desde: ${fromEmail} (${store.storeName})`);
+    
     const info = await transporter.sendMail(mailOptions);
-    console.log('✅ Email enviado exitosamente:', info.messageId);
+    console.log('✅ Email encolado en Brevo exitosamente!');
+    console.log('📬 Message ID:', info.messageId);
+    console.log('📬 Response:', info.response);
+    console.log('⚠️  NOTA: Si el email no llega, verifica:');
+    console.log('   1. Que el remitente (' + fromEmail + ') esté verificado en Brevo');
+    console.log('   2. Revisa la carpeta de spam del destinatario');
+    console.log('   3. Verifica los logs en tu cuenta de Brevo: https://app.brevo.com/statistics/email');
+    
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error('❌ Error al enviar email:', error.message);
-    console.error('Detalles del error:', {
-      code: error.code,
-      command: error.command,
-      response: error.response
-    });
-    throw new Error(`No se pudo enviar el comprobante por email: ${error.message}`);
+    console.error('❌ ========== ERROR AL ENVIAR EMAIL ==========');
+    console.error('❌ Mensaje:', error.message);
+    console.error('❌ Código:', error.code);
+    console.error('❌ Comando:', error.command);
+    console.error('❌ Respuesta:', error.response);
+    
+    // Mensaje específico para errores de autenticación
+    if (error.code === 'EAUTH' || error.response?.includes('Authentication failed')) {
+      console.error('');
+      console.error('🔐 ERROR DE AUTENTICACIÓN - Credenciales incorrectas');
+      console.error('📝 Verifica en tu cuenta de Brevo:');
+      console.error('   1. Ve a: https://app.brevo.com/settings/keys/api');
+      console.error('   2. Asegúrate de crear una SMTP Key (NO la API Key)');
+      console.error('   3. BREVO_USER debe ser tu email de cuenta de Brevo');
+      console.error('   4. BREVO_PASS debe ser la SMTP Key generada (NO tu contraseña)');
+      console.error('   5. La SMTP Key debe tener permisos de envío');
+      console.error('');
+    }
+    
+    console.error('❌ Stack:', error.stack);
+    console.error('❌ ===========================================');
+    
+    // Lanzar error con más detalles
+    let errorMessage = `No se pudo enviar el comprobante por email: ${error.message}`;
+    if (error.code === 'EAUTH') {
+      errorMessage += '. Verifica que BREVO_USER sea tu email de Brevo y BREVO_PASS sea la SMTP Key (no tu contraseña)';
+    }
+    throw new Error(errorMessage);
+  }
+};
+
+// Función de prueba para verificar la configuración
+const testConnection = async () => {
+  console.log('🧪 Iniciando prueba de conexión con Brevo...');
+  console.log('🔍 Credenciales configuradas:', {
+    user: process.env.BREVO_USER ? '✅ Configurado' : '❌ No configurado',
+    pass: process.env.BREVO_PASS ? '✅ Configurado' : '❌ No configurado'
+  });
+
+  try {
+    await transporter.verify();
+    console.log('✅ Conexión con Brevo verificada exitosamente');
+    return { success: true, message: 'Conexión exitosa' };
+  } catch (error) {
+    console.error('❌ Error al verificar conexión:', error.message);
+    console.error('❌ Código:', error.code);
+    return { success: false, message: error.message, code: error.code };
   }
 };
 
 module.exports = {
-  sendReceiptEmail
+  sendReceiptEmail,
+  testConnection
 };

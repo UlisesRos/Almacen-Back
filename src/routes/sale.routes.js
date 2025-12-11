@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getSalesStats, getTodaySales, getSale, getSales, createSale, cancelSale } = require('../controllers/sale.controller');
+const { getSalesStats, getTodaySales, getSale, getSales, createSale, cancelSale, sendSaleEmail } = require('../controllers/sale.controller');
 const { protect } = require('../middlewares/auth.middleware');
 
 // Todas las rutas requieren autenticación
@@ -18,5 +18,7 @@ router.route('/')
 router.route('/:id')
   .get( getSale )
   .delete( cancelSale );
+
+router.post('/:id/send-email', sendSaleEmail);
 
 module.exports = router;

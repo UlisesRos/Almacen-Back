@@ -249,13 +249,23 @@ const createSale = async (req, res) => {
       // Ejecutar en background sin bloquear la respuesta
       setImmediate(async () => {
         try {
+          console.log(`📧 Iniciando envío de comprobante a ${customer.email}...`);
           const store = await Store.findById(req.store.id);
+          
+          if (!store) {
+            throw new Error('Almacén no encontrado');
+          }
           
           await sendReceiptEmail(sale, store, customer.email);
           
-          console.log(`✅ Comprobante enviado por email a ${customer.email}`);
+          console.log(`✅ Comprobante enviado por email exitosamente a ${customer.email}`);
         } catch (emailError) {
-          console.error('❌ Error al enviar email:', emailError.message);
+          console.error('❌ ========== ERROR CRÍTICO AL ENVIAR EMAIL ==========');
+          console.error('❌ Email destino:', customer?.email);
+          console.error('❌ Error completo:', emailError);
+          console.error('❌ Mensaje:', emailError.message);
+          console.error('❌ Stack:', emailError.stack);
+          console.error('❌ ===================================================');
           // No afecta la venta, solo loggear el error
         }
       });
@@ -471,11 +481,66 @@ const getTodaySales = async (req, res) => {
   }
 };
 
+// @desc    Enviar comprobante por email de una venta existente
+// @route   POST /api/sales/:id/send-email
+// @access  Private
+const sendSaleEmail = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email del destinatario es requerido'
+      });
+    }
+
+    // Buscar la venta
+    const sale = await Sale.findOne({
+      _id: id,
+      storeId: req.store.id
+    });
+
+    if (!sale) {
+      return res.status(404).json({
+        success: false,
+        message: 'Venta no encontrada'
+      });
+    }
+
+    // Buscar el almacén
+    const store = await Store.findById(req.store.id);
+    if (!store) {
+      return res.status(404).json({
+        success: false,
+        message: 'Almacén no encontrado'
+      });
+    }
+
+    // Enviar el email
+    await sendReceiptEmail(sale, store, email);
+
+    res.json({
+      success: true,
+      message: 'Comprobante enviado por email exitosamente'
+    });
+  } catch (error) {
+    console.error('Error al enviar email:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al enviar el comprobante por email',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getSales,
   getSale,
   createSale,
   cancelSale,
   getSalesStats,
-  getTodaySales
+  getTodaySales,
+  sendSaleEmail
 }
