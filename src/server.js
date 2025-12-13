@@ -68,7 +68,7 @@ app.get('/api/test-email', async (req, res) => {
         }
 
         // Email de prueba
-        const testEmail = req.query.email || process.env.BREVO_USER;
+        const testEmail = req.query.email || process.env.BREVO_FROM_EMAIL || store.email;
         if (!testEmail) {
             return res.status(400).json({
                 success: false,

@@ -1,41 +1,23 @@
-const nodemailer = require('nodemailer');
 const path = require('path');
 
 require('dotenv').config({ path: path.join(process.cwd(), '.env') });
 
+// URL base de la API REST de Brevo
+const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
+
 console.log("📥 ========== CONFIGURACIÓN EMAIL SERVICE ==========");
-console.log("🔍 BREVO_USER:", process.env.BREVO_USER || "❌ NO CONFIGURADO");
-console.log("🔍 BREVO_PASS:", process.env.BREVO_PASS ? `✅ Configurado (${process.env.BREVO_PASS.length} caracteres)` : "❌ NO CONFIGURADO");
+console.log("🔍 BREVO_API_KEY:", process.env.BREVO_API_KEY ? `✅ Configurado (${process.env.BREVO_API_KEY.length} caracteres)` : "❌ NO CONFIGURADO");
 console.log("📧 BREVO_FROM_EMAIL:", process.env.BREVO_FROM_EMAIL || "⚠️  No configurado (se usará el email del almacén)");
-console.log("🌐 Host SMTP: smtp-relay.brevo.com");
-console.log("🔌 Puerto: 587 (TLS)");
-if (!process.env.BREVO_USER || !process.env.BREVO_PASS) {
-  console.log("⚠️  ADVERTENCIA: Las credenciales de Brevo no están configuradas correctamente");
+console.log("🌐 API REST: https://api.brevo.com/v3/smtp/email");
+if (!process.env.BREVO_API_KEY) {
+  console.log("⚠️  ADVERTENCIA: La API Key de Brevo no está configurada");
   console.log("📝 Para configurar Brevo:");
   console.log("   1. Ve a: https://app.brevo.com/settings/keys/api");
-  console.log("   2. Crea una SMTP Key (NO uses la API Key)");
-  console.log("   3. BREVO_USER = tu email de cuenta de Brevo");
-  console.log("   4. BREVO_PASS = la SMTP Key generada (NO tu contraseña de cuenta)");
-  console.log("   5. BREVO_FROM_EMAIL = email verificado en Brevo para enviar (opcional, se usa el email del almacén)");
+  console.log("   2. Crea una API Key (v3)");
+  console.log("   3. BREVO_API_KEY = la API Key generada");
+  console.log("   4. BREVO_FROM_EMAIL = email verificado en Brevo para enviar (opcional, se usa el email del almacén)");
 }
 console.log("📥 =================================================");
-
-// Configuracion del transporter para Brevo
-const transporter = nodemailer.createTransport({
-  host: 'smtp-relay.brevo.com',
-  port: 587,
-  secure: false, // true para 465, false para otros puertos
-  auth: {
-    user: process.env.BREVO_USER, 
-    pass: process.env.BREVO_PASS 
-  },
-  tls: {
-    // No rechazar certificados no autorizados
-    rejectUnauthorized: false
-  },
-  debug: true, // Habilitar debug para ver más detalles
-  logger: true // Habilitar logger
-});
 
 // Generar HTML del comprobante
 const generateReceiptHTML = (sale, store) => {
@@ -113,7 +95,6 @@ const generateReceiptHTML = (sale, store) => {
             <p style="margin: 4px 0;"><strong>${store.storeName}</strong></p>
             ${store.address ? `<p style="margin: 4px 0;">${store.address}</p>` : ''}
             ${store.phone ? `<p style="margin: 4px 0;">Tel: ${store.phone}</p>` : ''}
-            ${store.email ? `<p style="margin: 4px 0;">${store.email}</p>` : ''}
             <p style="margin: 16px 0 0 0; font-size: 12px; opacity: 0.7;">¡Gracias por su compra!</p>
           </div>
         </div>
@@ -123,11 +104,28 @@ const generateReceiptHTML = (sale, store) => {
   `;
 };
 
-// Verificar conexión con Brevo
+// Verificar conexión con Brevo usando la API REST
 const verifyConnection = async () => {
   try {
-    await transporter.verify();
-    console.log('✅ Conexión con Brevo verificada correctamente');
+    if (!process.env.BREVO_API_KEY) {
+      throw new Error('BREVO_API_KEY no está configurada');
+    }
+
+    // Hacer una petición simple a la API para verificar la conexión
+    const response = await fetch('https://api.brevo.com/v3/account', {
+      method: 'GET',
+      headers: {
+        'api-key': process.env.BREVO_API_KEY,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(`Error de API: ${response.status} - ${errorData.message || response.statusText}`);
+    }
+
+    console.log('✅ Conexión con Brevo API REST verificada correctamente');
     return true;
   } catch (error) {
     console.error('❌ Error al verificar conexión con Brevo:', error.message);
@@ -135,84 +133,102 @@ const verifyConnection = async () => {
   }
 };
 
-// Enviar email con comprobante
+// Enviar email con comprobante usando API REST de Brevo
 const sendReceiptEmail = async (sale, store, customerEmail) => {
-  console.log('🚀 Iniciando envío de email...');
+  console.log('🚀 Iniciando envío de email vía API REST de Brevo...');
   console.log('📋 Configuración:', {
-    host: transporter.options.host,
-    port: transporter.options.port,
-    user: process.env.BREVO_USER,
-    fromEmail: process.env.BREVO_USER,
+    apiUrl: BREVO_API_URL,
+    fromEmail: store.email || process.env.BREVO_FROM_EMAIL || 'No configurado',
     toEmail: customerEmail
   });
 
   try {
-    // Validar que las credenciales estén configuradas
-    if (!process.env.BREVO_USER || !process.env.BREVO_PASS) {
-      throw new Error('BREVO_USER o BREVO_PASS no están configurados en las variables de entorno');
+    // Validar que la API Key esté configurada
+    if (!process.env.BREVO_API_KEY) {
+      throw new Error('BREVO_API_KEY no está configurada en las variables de entorno');
     }
 
     const html = generateReceiptHTML(sale, store);
 
     // Usar el email del almacén como remitente (debe estar verificado en Brevo)
-    // Si no hay email del almacén, usar BREVO_FROM_EMAIL o BREVO_USER como fallback
-    const fromEmail = store.email || process.env.BREVO_FROM_EMAIL || process.env.BREVO_USER;
+    // Si no hay email del almacén, usar BREVO_FROM_EMAIL como fallback
+    const fromEmail = process.env.BREVO_FROM_EMAIL;
     
     // Validar que el email del remitente sea válido
     if (!fromEmail || !fromEmail.includes('@')) {
       throw new Error('El email del remitente no es válido. Verifica que el almacén tenga un email configurado o configura BREVO_FROM_EMAIL en las variables de entorno');
     }
 
-    const mailOptions = {
-      from: {
+    // Preparar el payload para la API REST de Brevo
+    const emailPayload = {
+      sender: {
         name: store.storeName || 'Almacén',
-        address: fromEmail
+        email: fromEmail
       },
-      to: customerEmail,
+      to: [
+        {
+          email: customerEmail
+        }
+      ],
       subject: `Comprobante de Venta - Ticket #${sale.ticketNumber}`,
-      html: html
+      htmlContent: html
     };
 
     console.log(`📧 Intentando enviar email a: ${customerEmail}`);
     console.log(`📧 Desde: ${fromEmail} (${store.storeName})`);
     
-    const info = await transporter.sendMail(mailOptions);
-    console.log('✅ Email encolado en Brevo exitosamente!');
-    console.log('📬 Message ID:', info.messageId);
-    console.log('📬 Response:', info.response);
+    // Enviar email usando la API REST de Brevo
+    const response = await fetch(BREVO_API_URL, {
+      method: 'POST',
+      headers: {
+        'api-key': process.env.BREVO_API_KEY,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(emailPayload)
+    });
+
+    const responseData = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      // Manejar errores de la API
+      const errorMessage = responseData.message || responseData.error || `Error HTTP ${response.status}`;
+      throw new Error(`Error de API Brevo: ${errorMessage}`);
+    }
+
+    console.log('✅ Email enviado exitosamente vía API REST de Brevo!');
+    console.log('📬 Message ID:', responseData.messageId || 'N/A');
     console.log('⚠️  NOTA: Si el email no llega, verifica:');
     console.log('   1. Que el remitente (' + fromEmail + ') esté verificado en Brevo');
     console.log('   2. Revisa la carpeta de spam del destinatario');
     console.log('   3. Verifica los logs en tu cuenta de Brevo: https://app.brevo.com/statistics/email');
     
-    return { success: true, messageId: info.messageId };
+    return { 
+      success: true, 
+      messageId: responseData.messageId || response.headers.get('x-message-id') || 'N/A' 
+    };
   } catch (error) {
     console.error('❌ ========== ERROR AL ENVIAR EMAIL ==========');
     console.error('❌ Mensaje:', error.message);
-    console.error('❌ Código:', error.code);
-    console.error('❌ Comando:', error.command);
-    console.error('❌ Respuesta:', error.response);
+    console.error('❌ Stack:', error.stack);
     
     // Mensaje específico para errores de autenticación
-    if (error.code === 'EAUTH' || error.response?.includes('Authentication failed')) {
+    if (error.message?.includes('401') || error.message?.includes('Unauthorized') || error.message?.includes('Invalid API key')) {
       console.error('');
-      console.error('🔐 ERROR DE AUTENTICACIÓN - Credenciales incorrectas');
+      console.error('🔐 ERROR DE AUTENTICACIÓN - API Key incorrecta');
       console.error('📝 Verifica en tu cuenta de Brevo:');
       console.error('   1. Ve a: https://app.brevo.com/settings/keys/api');
-      console.error('   2. Asegúrate de crear una SMTP Key (NO la API Key)');
-      console.error('   3. BREVO_USER debe ser tu email de cuenta de Brevo');
-      console.error('   4. BREVO_PASS debe ser la SMTP Key generada (NO tu contraseña)');
-      console.error('   5. La SMTP Key debe tener permisos de envío');
+      console.error('   2. Asegúrate de crear una API Key (v3)');
+      console.error('   3. BREVO_API_KEY debe ser la API Key generada');
+      console.error('   4. La API Key debe tener permisos de envío de emails');
       console.error('');
     }
     
-    console.error('❌ Stack:', error.stack);
     console.error('❌ ===========================================');
     
     // Lanzar error con más detalles
     let errorMessage = `No se pudo enviar el comprobante por email: ${error.message}`;
-    if (error.code === 'EAUTH') {
-      errorMessage += '. Verifica que BREVO_USER sea tu email de Brevo y BREVO_PASS sea la SMTP Key (no tu contraseña)';
+    if (error.message?.includes('401') || error.message?.includes('Invalid API key')) {
+      errorMessage += '. Verifica que BREVO_API_KEY sea correcta y tenga permisos de envío';
     }
     throw new Error(errorMessage);
   }
@@ -220,20 +236,41 @@ const sendReceiptEmail = async (sale, store, customerEmail) => {
 
 // Función de prueba para verificar la configuración
 const testConnection = async () => {
-  console.log('🧪 Iniciando prueba de conexión con Brevo...');
+  console.log('🧪 Iniciando prueba de conexión con Brevo API REST...');
   console.log('🔍 Credenciales configuradas:', {
-    user: process.env.BREVO_USER ? '✅ Configurado' : '❌ No configurado',
-    pass: process.env.BREVO_PASS ? '✅ Configurado' : '❌ No configurado'
+    apiKey: process.env.BREVO_API_KEY ? '✅ Configurado' : '❌ No configurado'
   });
 
   try {
-    await transporter.verify();
-    console.log('✅ Conexión con Brevo verificada exitosamente');
-    return { success: true, message: 'Conexión exitosa' };
+    if (!process.env.BREVO_API_KEY) {
+      throw new Error('BREVO_API_KEY no está configurada');
+    }
+
+    // Verificar la conexión haciendo una petición a la API de cuenta
+    const response = await fetch('https://api.brevo.com/v3/account', {
+      method: 'GET',
+      headers: {
+        'api-key': process.env.BREVO_API_KEY,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(`Error de API: ${response.status} - ${errorData.message || response.statusText}`);
+    }
+
+    const accountData = await response.json();
+    console.log('✅ Conexión con Brevo API REST verificada exitosamente');
+    console.log('📊 Información de cuenta:', {
+      email: accountData.email || 'N/A',
+      firstName: accountData.firstName || 'N/A',
+      lastName: accountData.lastName || 'N/A'
+    });
+    return { success: true, message: 'Conexión exitosa', account: accountData };
   } catch (error) {
     console.error('❌ Error al verificar conexión:', error.message);
-    console.error('❌ Código:', error.code);
-    return { success: false, message: error.message, code: error.code };
+    return { success: false, message: error.message };
   }
 };
 
