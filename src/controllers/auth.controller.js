@@ -40,7 +40,14 @@ const register = async (req, res) => {
           ownerName: store.ownerName,
           email: store.email,
           phone: store.phone,
-          address: store.address
+          address: store.address,
+          settings: store.settings || {
+            currency: 'ARS',
+            notifications: {
+              lowStock: true,
+              newSales: true
+            }
+          }
         },
         token
       }
@@ -112,7 +119,14 @@ const login = async (req, res) => {
           ownerName: store.ownerName,
           email: store.email,
           phone: store.phone,
-          address: store.address
+          address: store.address,
+          settings: store.settings || {
+            currency: 'ARS',
+            notifications: {
+              lowStock: true,
+              newSales: true
+            }
+          }
         },
         token
       }
@@ -135,9 +149,30 @@ const getMe = async (req, res) => {
   try {
     const store = await Store.findById(req.store.id);
 
+    if (!store) {
+      return res.status(404).json({
+        success: false,
+        message: 'Almacén no encontrado'
+      });
+    }
+
     res.json({
       success: true,
-      data: store
+      data: {
+        id: store._id,
+        storeName: store.storeName,
+        ownerName: store.ownerName,
+        email: store.email,
+        phone: store.phone,
+        address: store.address,
+        settings: store.settings || {
+          currency: 'ARS',
+          notifications: {
+            lowStock: true,
+            newSales: true
+          }
+        }
+      }
     });
   } catch (error) {
     console.error('Error en getMe:', error);
@@ -154,8 +189,9 @@ const getMe = async (req, res) => {
 // @access  Private
 const updateProfile = async (req, res) => {
   try {
-    const { storeName, ownerName, phone, address } = req.body;
+    const { storeName, ownerName, phone, address, settings } = req.body;
 
+    // Obtener el almacén actual
     const store = await Store.findById(req.store.id);
 
     if (!store) {
@@ -165,12 +201,34 @@ const updateProfile = async (req, res) => {
       });
     }
 
-    // Actualizar campos
+    // Actualizar campos básicos
     if (storeName) store.storeName = storeName;
     if (ownerName) store.ownerName = ownerName;
-    if (phone) store.phone = phone;
+    if (phone !== undefined) store.phone = phone;
     if (address !== undefined) store.address = address;
 
+    // Actualizar settings (notificaciones)
+    if (settings) {
+      if (!store.settings) {
+        store.settings = {};
+      }
+      if (settings.notifications) {
+        if (!store.settings.notifications) {
+          store.settings.notifications = {};
+        }
+        if (settings.notifications.lowStock !== undefined) {
+          store.settings.notifications.lowStock = settings.notifications.lowStock;
+        }
+        if (settings.notifications.newSales !== undefined) {
+          store.settings.notifications.newSales = settings.notifications.newSales;
+        }
+      }
+      if (settings.currency) {
+        store.settings.currency = settings.currency;
+      }
+    }
+
+    // Guardar cambios
     await store.save();
 
     res.json({
@@ -183,7 +241,8 @@ const updateProfile = async (req, res) => {
           ownerName: store.ownerName,
           email: store.email,
           phone: store.phone,
-          address: store.address
+          address: store.address,
+          settings: store.settings
         }
       }
     });
@@ -283,7 +342,14 @@ const googleAuth = async (req, res) => {
           ownerName: store.ownerName,
           email: store.email,
           phone: store.phone,
-          address: store.address
+          address: store.address,
+          settings: store.settings || {
+            currency: 'ARS',
+            notifications: {
+              lowStock: true,
+              newSales: true
+            }
+          }
         },
         token
       }

@@ -94,10 +94,13 @@ storeSchema.pre('save', async function(next) {
   }
 });
 
-// Validar que tenga password o googleId
+// Validar que tenga password o googleId (solo en creación o cuando se modifica password)
 storeSchema.pre('save', async function(next) {
-  if (!this.password && !this.googleId) {
-    return next(new Error('Debe proporcionar una contraseña o autenticarse con Google'));
+  // Solo validar si es un documento nuevo o si se está modificando el password
+  if (this.isNew || this.isModified('password')) {
+    if (!this.password && !this.googleId) {
+      return next(new Error('Debe proporcionar una contraseña o autenticarse con Google'));
+    }
   }
   next();
 });
