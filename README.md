@@ -52,7 +52,7 @@ Backend API RESTful desarrollado en Node.js y Express para gestionar un sistema 
 - Envío de comprobantes por email
 - Notificaciones de stock bajo
 - Alertas de productos por vencer
-- Integración con servicios de email (Nodemailer, Twilio)
+- Integración con servicios de email (BREVO)
 
 ## 🛠️ Tecnologías
 
@@ -63,76 +63,7 @@ Backend API RESTful desarrollado en Node.js y Express para gestionar un sistema 
 - **JWT** - Autenticación y autorización
 - **bcryptjs** - Encriptación de contraseñas
 - **express-validator** - Validación de datos
-- **Twilio** - Servicios de mensajería
 - **dotenv** - Variables de entorno
-
-## 📦 Instalación
-
-### Prerrequisitos
-
-- Node.js (v14 o superior)
-- MongoDB (local o remoto)
-- npm o yarn
-
-### Pasos de Instalación
-
-1. **Clonar el repositorio**
-```bash
-git clone <repository-url>
-cd almacen-app/almacen-back
-```
-
-2. **Instalar dependencias**
-```bash
-npm install
-```
-
-3. **Configurar variables de entorno**
-
-Crear un archivo `.env` en la raíz del proyecto:
-
-```env
-# Puerto del servidor
-PORT=5000
-
-# MongoDB
-MONGODB_URI=mongodb://localhost:27017/almacen-app
-# O MongoDB Atlas
-# MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/almacen-app
-
-# JWT
-JWT_SECRET=tu_secret_key_super_segura_aqui
-JWT_EXPIRE=30d
-
-# Email (Opcional)
-EMAIL_HOST=smtp.gmail.com
-EMAIL_PORT=587
-EMAIL_USER=tu_email@gmail.com
-EMAIL_PASS=tu_password_de_aplicacion
-
-# Twilio (Opcional)
-TWILIO_ACCOUNT_SID=tu_account_sid
-TWILIO_AUTH_TOKEN=tu_auth_token
-TWILIO_PHONE_NUMBER=+1234567890
-
-# Google OAuth (Opcional)
-GOOGLE_CLIENT_ID=tu_google_client_id
-GOOGLE_CLIENT_SECRET=tu_google_client_secret
-```
-
-4. **Iniciar el servidor**
-
-Modo desarrollo (con nodemon):
-```bash
-npm run dev
-```
-
-Modo producción:
-```bash
-npm start
-```
-
-El servidor estará disponible en `http://localhost:5000`
 
 ## 📁 Estructura del Proyecto
 
@@ -321,6 +252,3 @@ Las contribuciones son bienvenidas. Por favor:
 4. Push a la rama (`git push origin feature/AmazingFeature`)
 5. Abre un Pull Request
 
-## 📞 Soporte
-
-Para soporte, envía un email a [tu-email@example.com] o abre un issue en el repositorio.
