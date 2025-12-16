@@ -44,9 +44,19 @@ exports.protect = async (req, res, next) => {
 
   } catch (error) {
     console.error('Error en middleware protect:', error);
+    
+    // Verificar si el error es por expiración (aunque ahora no debería haber expiración)
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        success: false,
+        message: 'Token expirado. Por favor, inicia sesión nuevamente.'
+      });
+    }
+    
+    // Para otros errores (token inválido, etc.)
     return res.status(401).json({
       success: false,
-      message: 'Token inválido o expirado'
+      message: 'Token inválido'
     });
   }
 };
