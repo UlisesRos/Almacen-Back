@@ -1,5 +1,7 @@
 const Store = require('../models/Store.model');
 const generateToken = require('../utils/generateToken');
+const { sendPasswordResetEmail } = require('../services/emailService');
+const crypto = require('crypto');
 
 // @desc    Registrar nuevo almacén
 // @route   POST /api/auth/register
@@ -374,10 +376,159 @@ const googleAuth = async (req, res) => {
   }
 };
 
+// @desc    Solicitar recuperación de contraseña
+// @route   POST /api/auth/forgot-password
+// @access  Public
+const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    console.log('📧 Solicitud de recuperación de contraseña para:', email);
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Por favor proporciona un email'
+      });
+    }
+
+    // Buscar almacén por email (incluyendo password para verificar)
+    const store = await Store.findOne({ email }).select('+password');
+
+    // Por seguridad, siempre devolver éxito aunque el email no exista
+    // Esto previene que atacantes descubran qué emails están registrados
+    if (!store) {
+      console.log('⚠️  Email no encontrado en la base de datos:', email);
+      return res.json({
+        success: true,
+        message: 'Si el email existe, recibirás un correo con las instrucciones para recuperar tu contraseña'
+      });
+    }
+
+    console.log('✅ Almacén encontrado:', store.storeName);
+
+    // Verificar que el almacén tenga contraseña (no solo Google)
+    if (!store.password) {
+      console.log('⚠️  El almacén no tiene contraseña (solo Google):', email);
+      return res.json({
+        success: true,
+        message: 'Si el email existe, recibirás un correo con las instrucciones para recuperar tu contraseña'
+      });
+    }
+
+    // Generar token de recuperación
+    console.log('🔑 Generando token de recuperación...');
+    const resetToken = store.getResetPasswordToken();
+    await store.save({ validateBeforeSave: false });
+    console.log('✅ Token generado y guardado');
+
+    // Crear URL de reset
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const resetUrl = `${frontendUrl}/reset-password/${resetToken}`;
+    console.log('🔗 URL de reset generada:', resetUrl);
+
+    try {
+      // Enviar email
+      console.log('📤 Enviando email a:', store.email);
+      const emailResult = await sendPasswordResetEmail(store.email, store.storeName, resetUrl);
+      console.log('✅ Email enviado exitosamente. MessageId:', emailResult.messageId);
+
+      res.json({
+        success: true,
+        message: 'Si el email existe, recibirás un correo con las instrucciones para recuperar tu contraseña'
+      });
+    } catch (error) {
+      console.error('❌ Error al enviar email:', error);
+      console.error('❌ Detalles del error:', {
+        message: error.message,
+        stack: error.stack
+      });
+      
+      // Si falla el envío, limpiar el token
+      store.resetPasswordToken = undefined;
+      store.resetPasswordExpire = undefined;
+      await store.save({ validateBeforeSave: false });
+      console.log('🧹 Token limpiado debido al error');
+
+      return res.status(500).json({
+        success: false,
+        message: 'Error al enviar el email. Por favor intenta más tarde',
+        ...(process.env.NODE_ENV === 'development' && { error: error.message })
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ Error en forgotPassword:', error);
+    console.error('❌ Stack:', error.stack);
+    res.status(500).json({
+      success: false,
+      message: 'Error al procesar la solicitud',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Resetear contraseña
+// @route   POST /api/auth/reset-password/:token
+// @access  Public
+const resetPassword = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { password } = req.body;
+
+    if (!password || password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'La contraseña debe tener al menos 6 caracteres'
+      });
+    }
+
+    // Hash del token recibido para compararlo con el de la BD
+    const hashedToken = crypto
+      .createHash('sha256')
+      .update(token)
+      .digest('hex');
+
+    // Buscar almacén con el token y que no haya expirado
+    const store = await Store.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpire: { $gt: Date.now() }
+    }).select('+password +resetPasswordToken +resetPasswordExpire');
+
+    if (!store) {
+      return res.status(400).json({
+        success: false,
+        message: 'Token inválido o expirado'
+      });
+    }
+
+    // Establecer nueva contraseña
+    store.password = password;
+    store.resetPasswordToken = undefined;
+    store.resetPasswordExpire = undefined;
+    await store.save();
+
+    res.json({
+      success: true,
+      message: 'Contraseña actualizada exitosamente'
+    });
+
+  } catch (error) {
+    console.error('Error en resetPassword:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al resetear la contraseña',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   register,
   login,
   getMe,
   updateProfile,
-  googleAuth
+  googleAuth,
+  forgotPassword,
+  resetPassword
 }

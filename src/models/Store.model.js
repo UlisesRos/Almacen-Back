@@ -73,6 +73,14 @@ const storeSchema = new mongoose.Schema({
         default: true
       }
     }
+  },
+  resetPasswordToken: {
+    type: String,
+    select: false
+  },
+  resetPasswordExpire: {
+    type: Date,
+    select: false
   }
 }, {
   timestamps: true
@@ -117,7 +125,28 @@ storeSchema.methods.comparePassword = async function(candidatePassword) {
 storeSchema.methods.toJSON = function() {
   const store = this.toObject();
   delete store.password;
+  delete store.resetPasswordToken;
+  delete store.resetPasswordExpire;
   return store;
+};
+
+// Método para generar token de recuperación de contraseña
+storeSchema.methods.getResetPasswordToken = function() {
+  const crypto = require('crypto');
+  
+  // Generar token
+  const resetToken = crypto.randomBytes(20).toString('hex');
+  
+  // Hash del token y guardarlo en la base de datos
+  this.resetPasswordToken = crypto
+    .createHash('sha256')
+    .update(resetToken)
+    .digest('hex');
+  
+  // Establecer expiración (1 hora)
+  this.resetPasswordExpire = Date.now() + 60 * 60 * 1000;
+  
+  return resetToken;
 };
 
 module.exports = mongoose.model('Store', storeSchema);

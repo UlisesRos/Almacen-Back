@@ -6,7 +6,7 @@ const connectDB = require('./config/database');
 const authRoutes = require('./routes/auth.routes');
 const productsRoutes = require('./routes/product.routes');
 const saleRoutes = require('./routes/sale.routes');
-const { testConnection, sendReceiptEmail } = require('./services/emailService');
+const { testConnection, sendReceiptEmail, sendPasswordResetEmail } = require('./services/emailService');
 const Store = require('./models/Store.model');
 
 // Cargar variables de entorno
@@ -97,6 +97,70 @@ app.get('/api/test-email', async (req, res) => {
         });
     } catch (error) {
         console.error('❌ Error en prueba de email:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error al enviar email de prueba',
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
+    }
+});
+
+// Ruta de prueba para email de recuperación de contraseña
+app.get('/api/test-password-reset-email', async (req, res) => {
+    try {
+        console.log('🧪 Iniciando prueba de email de recuperación de contraseña...');
+        
+        // Verificar conexión
+        const connectionTest = await testConnection();
+        if (!connectionTest.success) {
+            return res.status(500).json({
+                success: false,
+                message: 'Error al verificar conexión con Brevo',
+                error: connectionTest.message
+            });
+        }
+
+        // Obtener el primer almacén para la prueba
+        const store = await Store.findOne();
+        if (!store) {
+            return res.status(404).json({
+                success: false,
+                message: 'No se encontró ningún almacén. Crea uno primero.'
+            });
+        }
+
+        // Email de prueba
+        const testEmail = req.query.email || process.env.BREVO_FROM_EMAIL || store.email;
+        if (!testEmail) {
+            return res.status(400).json({
+                success: false,
+                message: 'Debes proporcionar un email de prueba. Usa: /api/test-password-reset-email?email=tu@email.com'
+            });
+        }
+
+        // Generar un token de prueba
+        const testToken = require('crypto').randomBytes(20).toString('hex');
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const resetUrl = `${frontendUrl}/reset-password/${testToken}`;
+
+        console.log('📧 Enviando email de prueba a:', testEmail);
+        console.log('🔗 URL de reset:', resetUrl);
+
+        const result = await sendPasswordResetEmail(testEmail, store.storeName, resetUrl);
+
+        res.json({
+            success: true,
+            message: 'Email de recuperación de contraseña enviado exitosamente',
+            data: {
+                to: testEmail,
+                messageId: result.messageId,
+                resetUrl: resetUrl,
+                note: 'Este es un email de prueba. El token no es válido para resetear contraseñas reales.'
+            }
+        });
+    } catch (error) {
+        console.error('❌ Error en prueba de email de recuperación:', error);
         res.status(500).json({
             success: false,
             message: 'Error al enviar email de prueba',
