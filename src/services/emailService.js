@@ -5,19 +5,11 @@ require('dotenv').config({ path: path.join(process.cwd(), '.env') });
 // URL base de la API REST de Brevo
 const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 
-console.log("📥 ========== CONFIGURACIÓN EMAIL SERVICE ==========");
-console.log("🔍 BREVO_API_KEY:", process.env.BREVO_API_KEY ? `✅ Configurado (${process.env.BREVO_API_KEY.length} caracteres)` : "❌ NO CONFIGURADO");
-console.log("📧 BREVO_FROM_EMAIL:", process.env.BREVO_FROM_EMAIL || "⚠️  No configurado (se usará el email del almacén)");
-console.log("🌐 API REST: https://api.brevo.com/v3/smtp/email");
+// Verificar configuración al cargar el módulo
 if (!process.env.BREVO_API_KEY) {
-  console.log("⚠️  ADVERTENCIA: La API Key de Brevo no está configurada");
-  console.log("📝 Para configurar Brevo:");
-  console.log("   1. Ve a: https://app.brevo.com/settings/keys/api");
-  console.log("   2. Crea una API Key (v3)");
-  console.log("   3. BREVO_API_KEY = la API Key generada");
-  console.log("   4. BREVO_FROM_EMAIL = email verificado en Brevo para enviar (opcional, se usa el email del almacén)");
+  console.warn("⚠️  BREVO_API_KEY no está configurada. El servicio de email no funcionará correctamente.");
+  console.warn("📝 Configura BREVO_API_KEY en las variables de entorno para habilitar el envío de emails.");
 }
-console.log("📥 =================================================");
 
 // Generar HTML del comprobante
 const generateReceiptHTML = (sale, store) => {
@@ -125,7 +117,7 @@ const verifyConnection = async () => {
       throw new Error(`Error de API: ${response.status} - ${errorData.message || response.statusText}`);
     }
 
-    console.log('✅ Conexión con Brevo API REST verificada correctamente');
+    // Conexión verificada correctamente
     return true;
   } catch (error) {
     console.error('❌ Error al verificar conexión con Brevo:', error.message);
@@ -135,12 +127,6 @@ const verifyConnection = async () => {
 
 // Enviar email con comprobante usando API REST de Brevo
 const sendReceiptEmail = async (sale, store, customerEmail) => {
-  console.log('🚀 Iniciando envío de email vía API REST de Brevo...');
-  console.log('📋 Configuración:', {
-    apiUrl: BREVO_API_URL,
-    fromEmail: store.email || process.env.BREVO_FROM_EMAIL || 'No configurado',
-    toEmail: customerEmail
-  });
 
   try {
     // Validar que la API Key esté configurada
@@ -174,9 +160,6 @@ const sendReceiptEmail = async (sale, store, customerEmail) => {
       htmlContent: html
     };
 
-    console.log(`📧 Intentando enviar email a: ${customerEmail}`);
-    console.log(`📧 Desde: ${fromEmail} (${store.storeName})`);
-    
     // Enviar email usando la API REST de Brevo
     const response = await fetch(BREVO_API_URL, {
       method: 'POST',
@@ -195,13 +178,6 @@ const sendReceiptEmail = async (sale, store, customerEmail) => {
       throw new Error(`Error de API Brevo: ${errorMessage}`);
     }
 
-    console.log('✅ Email enviado exitosamente vía API REST de Brevo!');
-    console.log('📬 Message ID:', responseData.messageId || 'N/A');
-    console.log('⚠️  NOTA: Si el email no llega, verifica:');
-    console.log('   1. Que el remitente (' + fromEmail + ') esté verificado en Brevo');
-    console.log('   2. Revisa la carpeta de spam del destinatario');
-    console.log('   3. Verifica los logs en tu cuenta de Brevo: https://app.brevo.com/statistics/email');
-    
     return { 
       success: true, 
       messageId: responseData.messageId || response.headers.get('x-message-id') || 'N/A' 
@@ -236,10 +212,6 @@ const sendReceiptEmail = async (sale, store, customerEmail) => {
 
 // Función de prueba para verificar la configuración
 const testConnection = async () => {
-  console.log('🧪 Iniciando prueba de conexión con Brevo API REST...');
-  console.log('🔍 Credenciales configuradas:', {
-    apiKey: process.env.BREVO_API_KEY ? '✅ Configurado' : '❌ No configurado'
-  });
 
   try {
     if (!process.env.BREVO_API_KEY) {
@@ -261,12 +233,6 @@ const testConnection = async () => {
     }
 
     const accountData = await response.json();
-    console.log('✅ Conexión con Brevo API REST verificada exitosamente');
-    console.log('📊 Información de cuenta:', {
-      email: accountData.email || 'N/A',
-      firstName: accountData.firstName || 'N/A',
-      lastName: accountData.lastName || 'N/A'
-    });
     return { success: true, message: 'Conexión exitosa', account: accountData };
   } catch (error) {
     console.error('❌ Error al verificar conexión:', error.message);

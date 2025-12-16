@@ -45,8 +45,6 @@ app.get('/', (req, res) => {
 // Ruta de prueba para email (solo en desarrollo)
 app.get('/api/test-email', async (req, res) => {
     try {
-        console.log('🧪 Iniciando prueba de email...');
-        
         // Verificar conexión
         const connectionTest = await testConnection();
         if (!connectionTest.success) {
@@ -87,7 +85,6 @@ app.get('/api/test-email', async (req, res) => {
             createdAt: new Date()
         };
 
-        console.log(`📧 Enviando email de prueba a: ${testEmail}`);
         const result = await sendReceiptEmail(testSale, store, testEmail);
 
         res.json({

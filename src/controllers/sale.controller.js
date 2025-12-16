@@ -249,7 +249,6 @@ const createSale = async (req, res) => {
       // Ejecutar en background sin bloquear la respuesta
       setImmediate(async () => {
         try {
-          console.log(`📧 Iniciando envío de comprobante a ${customer.email}...`);
           const store = await Store.findById(req.store.id);
           
           if (!store) {
@@ -257,8 +256,6 @@ const createSale = async (req, res) => {
           }
           
           await sendReceiptEmail(sale, store, customer.email);
-          
-          console.log(`✅ Comprobante enviado por email exitosamente a ${customer.email}`);
         } catch (emailError) {
           console.error('❌ ========== ERROR CRÍTICO AL ENVIAR EMAIL ==========');
           console.error('❌ Email destino:', customer?.email);
